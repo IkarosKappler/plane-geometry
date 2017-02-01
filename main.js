@@ -42,9 +42,9 @@ $( document ).ready( function() {
     myScene.scaleX       = parseFloat(myScene.getParam('scaleX',10.0));
     myScene.scaleY       = parseFloat(myScene.getParam('scaleY',1.0));
     myScene.wireframe    = myScene.getParam('wireframe',false);
-    myScene.term         = myScene.getParam('term','sin(x)*y^2');
-
-    console.debug( 'scaleX=' + myScene.scaleX );
+    myScene.termX        = myScene.getParam('termX','x');
+    myScene.termY        = myScene.getParam('termY','y');
+    myScene.termZ        = myScene.getParam('termZ','sin(x)*y^2');
 
     /* UI generation copied from the Three.js examples */
     function initGUI() {
@@ -60,7 +60,7 @@ $( document ).ready( function() {
 	    myScene.segments = parseInt(value);
 	    rebuild();
 	} );
-	gui.add( myScene, 'heightFactor', 0.0, 500.0, 50.0 ).step(10.0).onChange( function(value) {
+	gui.add( myScene, 'heightFactor', 0.0, 50.0 ).step(1.0).onChange( function(value) {
 	    myScene.heightFactor = parseInt(value);
 	    rebuild();
 	} );
@@ -80,9 +80,16 @@ $( document ).ready( function() {
 	    myScene.scaleY = parseFloat(value);
 	    rebuild();
 	} );
-	gui.add( myScene, 'term', myScene.term ).name('term(x,y):[-1,1]').onChange( function(value) {
+	gui.add( myScene, 'termX', myScene.termX ).name('termX(x,y):[-1,1]').onChange( function(value) {
 	    rebuild();
 	} );
+	gui.add( myScene, 'termY', myScene.termY ).name('termY(x,y):[-1,1]').onChange( function(value) {
+	    rebuild();
+	} ); 
+	gui.add( myScene, 'termZ', myScene.termZ ).name('termZ(x,y):[-1,1]').onChange( function(value) {
+	    rebuild();
+	} );
+	
     }
     initGUI();
 
@@ -91,25 +98,40 @@ $( document ).ready( function() {
     function rebuild() {
 	myScene.terrain = [];
 
+	//var segmentFract = myScene.width/myScene.segments;
+
 	// Prepare parser
 	//  See https://github.com/silentmatt/expr-eval
-	var parser =  Parser.parse(myScene.term);
+	var parserX =  Parser.parse(myScene.termX);
+	var parserY =  Parser.parse(myScene.termY);	
+	var parserZ =  Parser.parse(myScene.termZ);
 	
 	// Keep track of height data.
+	var imgX, imgY, imgZ;
 	for( var x = 0; x < myScene.segments; x++ ) {
 	    myScene.terrain[x] = [];
-	    var xFract = (x-(myScene.segments-1)/2.0)/(myScene.segments);
-	    xFract *= 2.0;             // Scale from [0,0.5] to [0,1.0]
+	    var xFract    = (x-(myScene.segments-1)/2.0)/(myScene.segments);
+	    var xPosition = xFract*myScene.width;
+	    xFract *= 2.0;             // Scale from [-0.5,0.5] to [-1.0,1.0]
+	    //var xValue = xFract;
 	    xFract *= myScene.scaleX;  // Default 1.0
 	    xFract += myScene.offsetX; // Default 0.0
 	    for( var y = 0; y < myScene.segments; y++ ) {
-		var yFract = (y-(myScene.segments-1)/2.0)/(myScene.segments);
+		var yFract    = (y-(myScene.segments-1)/2.0)/(myScene.segments);
+		var yPosition = yFract*myScene.height;
 		yFract *= 2.0;
 		yFract *= myScene.scaleY;
 		yFract += myScene.offsetY;
 		//console.debug( 'xFract=' + xFract + ', yFract=' + yFract );
 		// Might throw exception!
-		myScene.terrain[x][y] = parser.evaluate( { x : xFract, y : yFract } ) * myScene.heightFactor;
+		imgX = parserX.evaluate( { x : xFract, y : yFract } );
+		imgY = parserY.evaluate( { x : xFract, y : yFract } );
+		imgZ = parserZ.evaluate( { x : xFract, y : yFract } );
+		myScene.terrain[x][y] = {
+		    x : ((imgX-myScene.offsetX) / myScene.scaleX) * myScene.width/2, 
+		    y : ((imgY-myScene.offsetY) / myScene.scaleY) * myScene.width/2,   
+		    z : parserZ.evaluate( { x : xFract, y : yFract } ) * myScene.heightFactor
+		}
 	    }
 	}
 
@@ -125,7 +147,9 @@ $( document ).ready( function() {
 	for( var x = 0; x < myScene.segments; x++ ) {
 	    for( var y = 0; y < myScene.segments; y++ ) {
 		index = (y)*(myScene.segments)*3 + (x)*3 + 2;
-		myScene.geometry.attributes.position.array[index] = myScene.terrain[x][y];
+		myScene.geometry.attributes.position.array[index-2] = myScene.terrain[x][y].x;
+		myScene.geometry.attributes.position.array[index-1] = myScene.terrain[x][y].y;
+		myScene.geometry.attributes.position.array[index]   = myScene.terrain[x][y].z;
 	    }
 	}
 
